@@ -4,114 +4,107 @@
 #include <Arduino.h>
 #include <SPI.h>
 
-enum SPIFlash_IC_Size {
-  W25Q40_IC = 4,     // 4M-BIT
-  W25Q80_IC = 8,     // 8M-BIT
-  W25Q16_IC = 16,    // 16M-BIT
-  W25Q32_IC = 32,    // 32M-BIT
-  W25Q64_IC = 64,    // 64M-BIT
-  W25Q128_IC = 128,  // 128M-BIT
-  W25Q256_IC = 256,  // 256M-BIT
-  W25Q512_IC = 512,  // 512M-BIT
-  W25Q01_IC = 1024,  // 1G-BIT (1024M-BIT) 32-BIT addr
-  W25Q02_IC = 2048   // 2G-BIT (2048M-BIT) 32-BIT addr
-};
+#define BIT_SET(a, b) ((a) |= (1ULL << (b)))
+#define BIT_CLEAR(a, b) ((a) &= ~(1ULL << (b)))
+
+#define W25Q40_IC 4// 4M-BIT
+#define W25Q80_IC 8// 8M-BIT
+#define W25Q16_IC 16// 16M-BIT
+#define W25Q32_IC 32// 32M-BIT
+#define W25Q64_IC 64// 64M-BIT
+#define W25Q128_IC 128// 128M-BIT
+#define W25Q256_IC 256// 256M-BIT
+#define W25Q512_IC 512// 512M-BIT
+#define W25Q01_IC 1024// 1G-BIT (1024M-BIT) 32-BIT addr
+#define W25Q02_IC 2048// 2G-BIT (2048M-BIT) 32-BIT addr
 
 // (Volatile/Non-Volatile Writable)
-enum SPIFlash_Status_Reg1 {
-  WRITE_IN_PROGRESS_bit = 0,
-  WRITE_ENABLE_LATCH_bit,
-  BLOCK_PROT_BIT0_bit,
-  BLOCK_PROT_BIT1_bit,
-  BLOCK_PROT_BIT2_bit,
-  TOP_BOTTOM_PROT_bit,
-  SECTOR_PROT_bit,
-  STATUS_REG_PROT_bit
-}
+#define SR1_WRITE_IN_PROGRESS_bit 0
+#define SR1_WRITE_ENABLE_LATCH_bit 1
+#define SR1_BLOCK_PROT_BIT0_bit 2
+#define SR1_BLOCK_PROT_BIT1_bit 3
+#define SR1_BLOCK_PROT_BIT2_bit 4
+#define SR1_TOP_BOTTOM_PROT_bit 5
+#define SR1_SECTOR_PROT_bit 6
+#define SR1_STATUS_REG_PROT_bit 7
 
 // (Volatile/Non-Volatile Writable)
-enum SPIFlash_Status_Reg2 {
-  STATUS_REG_LOCK_bit = 0,
-  QUAD_ENABLE_bit,
-  RESERVED_bit,
-  SECURITY_REG_LOCK_BIT0_bit,
-  SECURITY_REG_LOCK_BIT1_bit,
-  SECURITY_REG_LOCK_BIT2_bit,
-  COMPLEMENT_PROt_bit,
-  SUSPEND_STATUS_bit
-}
+#define SR2_STATUS_REG_LOCK_bit 0
+#define SR2_QUAD_ENABLE_bit 1
+#define SR2_RESERVED2_SR2_bit 2
+#define SR2_SECURITY_REG_LOCK_BIT0_bit 3
+#define SR2_SECURITY_REG_LOCK_BIT1_bit 4
+#define SR2_SECURITY_REG_LOCK_BIT2_bit 5
+#define SR2_COMPLEMENT_PROt_bit 6
+#define SR2_SUSPEND_STATUS_bit 7
 
 // (Volatile/Non-Volatile Writable)
-enum SPIFlash_Status_Reg3 {
-  RESERVED_bit = 0,
-  RESERVED_bit,
-  WRITE_PROT_SEL_bit,
-  RESERVED_bit,
-  RESERVED_bit,
-  OUTPUT_DRV_STRENGTH_BIT0_bit,
-  OUTPUT_DRV_STRENGTH_BIT1_bit,
-  RESERVED_bit
-}
+#define SR3_RESERVED0_bit 0
+#define SR3_RESERVED1_bit 1
+#define SR3_WRITE_PROT_SEL_bit 2
+#define SR3_RESERVED3_bit 3
+#define SR3_RESERVED4_bit 4
+#define SR3_OUTPUT_DRV_STRENGTH_BIT0_bit 5
+#define SR3_OUTPUT_DRV_STRENGTH_BIT1_bit 6
+#define SR3_RESERVED5_bit 7
 
 // From datasheet "W25Q80, W25Q16, W25Q32" - Winbond - September 26, 2007, Rev. B
-enum SPIFlash_Cmd {
-  Write_Status_Reg1_cmd = 0x01,
-  Page_Prog_cmd = 0x02,
-  Read_Data_cmd = 0x03,
-  Write_Disable_cmd = 0x04,
-  Read_Status_Reg1_cmd = 0x05,
-  Write_Enable_cmd = 0x06,
-  Fast_Read_cmd = 0x0B,
-  Write_Status_Reg3_cmd = 0x11,  // For W25Q32JV
-  Read_Status_Reg3_cmd = 0x15,   // For W25Q32JV
-  Sector_Erase_cmd = 0x20,
-  Write_Status_Reg2_cmd = 0x31,  // For W25Q32JV
-  Quad_Input_Page_Prog_cmd = 0x32,
-  Read_Status_Reg2_cmd = 0x35,
-  Individual_Block_Lock_cmd = 0x36,     // For W25Q32JV
-  Individual_Sector_Lock_cmd = 0x36,    // For W25Q32JV
-  Individual_Block_Unlock_cmd = 0x39,   // For W25Q32JV
-  Individual_Sector_Unlock_cmd = 0x39,  // For W25Q32JV
-  Fast_Read_Dual_Output_cmd = 0x3B,
-  Read_Block_Lock_cmd = 0x3D,     // For W25Q32JV
-  Read_Sector_Lock_cmd = 0x3D,    // For W25Q32JV
-  Prog_Security_Reg_cmd = 0x42,   // For W25Q32JV
-  Erase_Security_Reg_cmd = 0x44,  // For W25Q32JV
-  Read_Security_Reg_cmd = 0x48,   // For W25Q32JV
-  Read_Unique_ID_cmd = 0x4B,      // For W25Q16, this feature is available upon special request
-  Write_Enable_VSReg_cmd = 0x50,  // For W25Q32JV
-  Block_Erase_32KB_cmd = 0x52,
-  Read_SFDP_Reg_cmd = 0x5A,  // For W25Q32JV - See note 1
-  Chip_Erase2_cmd = 0x60,
-  Enable_Reset_cmd = 0x66,  // For W25Q32JV
-  Fast_Read_Quad_Output_cmd = 0x6B,
-  Erase_Suspend_cmd = 0x75,
-  Set_Burst_Wrap_cmd = 0x77,  // For W25Q32JV
-  Erase_Resume_cmd = 0x7A,
-  Global_Block_Lock_cmd = 0x7E,   // For W25Q32JV
-  Global_Sector_Lock_cmd = 0x7E,  // For W25Q32JV
-  Read_Manufacturer_cmd = 0x90,
-  Device_ID_cmd = 0x90,
-  Read_Manufacturer_Dual_IO_cmd = 0x92,  // For W25Q32JV
-  Device_ID_Dual_IO_cmd = 0x92,          // For W25Q32JV
-  Read_Manufacturer_Quad_IO_cmd = 0x94,  // For W25Q32JV
-  Device_ID_Quad_IO_cmd = 0x94,          // For W25Q32JV
-  Global_Block_Unlock_cmd = 0x98,        // For W25Q32JV
-  Global_Sector_Unlock_cmd = 0x98,       // For W25Q32JV
-  Reset_Device_cmd = 0x99,               // For W25Q32JV
-  JEDEC_ID_cmd = 0x9F,
-  High_Performance_Mode_cmd = 0xA3,
-  Release_PD_cmd = 0xAB,         // This instruction is a multi-purpose instruction
-  Release_HPM_cmd = 0xAB,        // This instruction is a multi-purpose instruction
-  Release_Device_ID_cmd = 0xAB,  // This instruction is a multi-purpose instruction
-  Power_Down_cmd = 0xB9,
-  Fast_Read_Dual_IO_cmd = 0xBB,
-  Chip_Erase1_cmd = 0xC7,
-  Block_Erase_64KB_cmd = 0xD8,
-  Fast_Read_Quad_IO_cmd = 0xEB,
-  Mode_Bit_Reset1_cmd = 0xFF,
-  Mode_Bit_Reset2_cmd = 0xFFFF
-};
+#define Write_Status_Reg1_cmd 0x01
+#define Page_Prog_cmd 0x02
+#define Read_Data_cmd 0x03
+#define Write_Disable_cmd 0x04
+#define Read_Status_Reg1_cmd 0x05
+#define Write_Enable_cmd 0x06
+#define Fast_Read_cmd 0x0B
+#define Write_Status_Reg3_cmd 0x11  // For W25Q32JV
+#define Read_Status_Reg3_cmd 0x15   // For W25Q32JV
+#define Sector_Erase_cmd 0x20
+#define Write_Status_Reg2_cmd 0x31  // For W25Q32JV
+#define Quad_Input_Page_Prog_cmd 0x32
+#define Read_Status_Reg2_cmd 0x35
+#define Individual_Block_Lock_cmd 0x36     // For W25Q32JV
+#define Individual_Sector_Lock_cmd 0x36    // For W25Q32JV
+#define Individual_Block_Unlock_cmd 0x39   // For W25Q32JV
+#define Individual_Sector_Unlock_cmd 0x39  // For W25Q32JV
+#define Fast_Read_Dual_Output_cmd 0x3B
+#define Read_Block_Lock_cmd 0x3D     // For W25Q32JV
+#define Read_Sector_Lock_cmd 0x3D    // For W25Q32JV
+#define Prog_Security_Reg_cmd 0x42   // For W25Q32JV
+#define Erase_Security_Reg_cmd 0x44  // For W25Q32JV
+#define Read_Security_Reg_cmd 0x48   // For W25Q32JV
+#define Read_Unique_ID_cmd 0x4B      // For W25Q16 this feature is available upon special request
+#define Write_Enable_VSReg_cmd 0x50  // For W25Q32JV
+#define Block_Erase_32KB_cmd 0x52
+#define Read_SFDP_Reg_cmd 0x5A  // For W25Q32JV - See note 1
+#define Chip_Erase2_cmd 0x60
+#define Enable_Reset_cmd 0x66  // For W25Q32JV
+#define Fast_Read_Quad_Output_cmd 0x6B
+#define Erase_Suspend_cmd 0x75
+#define Set_Burst_Wrap_cmd 0x77  // For W25Q32JV
+#define Erase_Resume_cmd 0x7A
+#define Global_Block_Lock_cmd 0x7E   // For W25Q32JV
+#define Global_Sector_Lock_cmd 0x7E  // For W25Q32JV
+#define Read_Manufacturer_cmd 0x90
+#define Device_ID_cmd 0x90
+#define Read_Manufacturer_Dual_IO_cmd 0x92  // For W25Q32JV
+#define Device_ID_Dual_IO_cmd 0x92          // For W25Q32JV
+#define Read_Manufacturer_Quad_IO_cmd 0x94  // For W25Q32JV
+#define Device_ID_Quad_IO_cmd 0x94          // For W25Q32JV
+#define Global_Block_Unlock_cmd 0x98        // For W25Q32JV
+#define Global_Sector_Unlock_cmd 0x98       // For W25Q32JV
+#define Reset_Device_cmd 0x99               // For W25Q32JV
+#define JEDEC_ID_cmd 0x9F
+#define High_Performance_Mode_cmd 0xA3
+#define Release_PD_cmd 0xAB         // This instruction is a multi-purpose instruction
+#define Release_HPM_cmd 0xAB        // This instruction is a multi-purpose instruction
+#define Release_Device_ID_cmd 0xAB  // This instruction is a multi-purpose instruction
+#define Power_Down_cmd 0xB9
+#define Fast_Read_Dual_IO_cmd 0xBB
+#define Chip_Erase1_cmd 0xC7
+#define Block_Erase_64KB_cmd 0xD8
+#define Fast_Read_Quad_IO_cmd 0xEB
+#define Mode_Bit_Reset1_cmd 0xFF
+#define Mode_Bit_Reset2_cmd 0xFFFF
 /*
     Note 1:
       The W25Q32JV features a 256-Byte Serial Flash Discoverable Parameter (SFDP) register that contains
@@ -172,19 +165,16 @@ public:
   uint8_t enable_quad_spi();
   uint8_t disable_quad_spi();
 
-  uint32_t FLASH_BYTE = ((4) * 1024 * 1024);  //4MB (for W25Q32: "(4)")
-  uint16_t SECTOR_BYTE = ((4) * 1024);        //4kb
-  uint16_t BLOCK_BYTE = ((64) * 1024);        //64kb (The memories W25Qxx also accept 32kB blocks see datasheet)
-  uint16_t PAGE_BYTE = ((1) * 256);           //256byte
+  uint32_t FLASH_BYTE = (uint32_t)((4) * 1024 * 1024);  //4MB (for W25Q32: "(4)")
+  uint16_t SECTOR_BYTE = (uint16_t)((4) * 1024);        //4kb
+  uint16_t BLOCK_BYTE = (uint16_t)((64) * 1024);        //64kb (The memories W25Qxx also accept 32kB blocks see datasheet)
+  uint16_t PAGE_BYTE = (uint16_t)((1) * 256);           //256byte
 
-  uint16_t var_PAGE_SIZE = (FLASH_BYTE / PAGE_BYTE);  // for W25Q32: ((1) * 1024) //1024*256 = 4MB
-  uint16_t var_SECTOR_SIZE = (FLASH_BYTE / var_SECTOR_BYTE);
-  uint16_t var_BLOCK_SIZE = (FLASH_BYTE / BLOCK_BYTE);
+  uint16_t PAGE_SIZE = (uint16_t)(FLASH_BYTE / PAGE_BYTE);  // for W25Q32: ((1) * 1024) //1024*256 = 4MB
+  uint16_t SECTOR_SIZE = (uint16_t)(FLASH_BYTE / SECTOR_BYTE);
+  uint16_t BLOCK_SIZE = (uint16_t)(FLASH_BYTE / BLOCK_BYTE);
 
 private:
-#define BIT_SET(a, b) ((a) |= (1ULL << (b)))
-#define BIT_CLEAR(a, b) ((a) &= ~(1ULL << (b)))
-
   uint8_t _FLASH_CS;
   uint32_t _speedMaximum;
 

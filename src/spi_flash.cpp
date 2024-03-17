@@ -8,9 +8,9 @@ void SPIFlash::flash_set_cs(uint8_t CS_pin) {
 
 uint8_t SPIFlash::begin(uint32_t IcModelSize_Mbit, uint8_t CS_pin, uint32_t speedMaximum) {
   FLASH_BYTE = ((IcModelSize_Mbit / 8) * 1024 * 1024);  // BIT to BYTE: (IcModelSize_Mbit / 8)
-  PAGE_SIZE = (FLASH_BYTE / var_PAGE_BYTE);             // For W25Q32: ((1) * 1024) / ((1) * 256) = 4MB bytes
-  SECTOR_SIZE = (FLASH_BYTE / var_SECTOR_BYTE);         // For W25Q32: ((1) * 1024) / ((4) * 1024) = 256 sectors
-  BLOCK_SIZE = (FLASH_BYTE / var_BLOCK_BYTE);           // For W25Q32: ((1) * 1024) / ((64) * 1024) = 64 blocks
+  PAGE_SIZE = (FLASH_BYTE / PAGE_BYTE);             // For W25Q32: ((1) * 1024) / ((1) * 256) = 4MB bytes
+  SECTOR_SIZE = (FLASH_BYTE / SECTOR_BYTE);         // For W25Q32: ((1) * 1024) / ((4) * 1024) = 256 sectors
+  BLOCK_SIZE = (FLASH_BYTE / BLOCK_BYTE);           // For W25Q32: ((1) * 1024) / ((64) * 1024) = 64 blocks
 
   flash_set_cs(CS_pin);
 
@@ -30,7 +30,7 @@ uint8_t SPIFlash::init_flash(void) {
   digitalWrite(_FLASH_CS, HIGH);
   SPI.transfer(Release_PD_cmd);  // Send POWER command
   read_device_id();
-  status = write_register(Write_Status_Register1_cmd, wr, 1);  //remove PROTECT
+  status = write_register(Write_Status_Reg1_cmd, wr, 1);  //remove PROTECT
   wait_flash();
   return status;
 }
@@ -78,7 +78,7 @@ void SPIFlash::write_addr(uint32_t cmd, uint32_t address) {
 void SPIFlash::wait_flash() {
   uint8_t reg1[1], is_busy = 1;
   while (is_busy) {
-    read_register(Read_Status_Register1_cmd, reg1, 1);
+    read_register(Read_Status_Reg1_cmd, reg1, 1);
     is_busy = ((reg1[0]) & 0x01);
     delay(1);
   }
@@ -89,7 +89,7 @@ void SPIFlash::write_enable() {
   //Wait
   uint8_t reg1[1], is_enable = 0;
   while (!is_enable) {
-    read_register(Read_Status_Register1_cmd, reg1, 1);
+    read_register(Read_Status_Reg1_cmd, reg1, 1);
     is_enable = ((reg1[0]) & 0x02);
     delay(1);
   }
@@ -138,7 +138,7 @@ uint8_t SPIFlash::write_flash(uint32_t address, uint8_t *data, uint32_t size) {
     size = ((page_byte > PAGE_BYTE) ? PAGE_BYTE : page_byte);
     //write page
     digitalWrite(_FLASH_CS, LOW);
-    write_addr(Page_Program_cmd, address);
+    write_addr(Page_Prog_cmd, address);
     //write data
     for (uint8_t i = 0; i < (size); i++) {
       status = SPI.transfer(data[i]);
@@ -198,9 +198,9 @@ uint8_t SPIFlash::reset_flash() {
  */
 uint8_t SPIFlash::enable_quad_spi() {
   uint8_t status = FLASH_OK;
-  uint8_t reg2 = 0;
-  read_register(Read_Status_Register2_cmd, reg2, 1);
-  BIT_SET(reg2, QUAD_ENABLE_bit);
+  uint8_t reg2[1] = {0};
+  read_register(Read_Status_Reg2_cmd, reg2, 1);
+  BIT_SET(reg2[0], SR2_QUAD_ENABLE_bit);
   status = write_register(Write_Status_Reg2_cmd, reg2, 1);
   wait_flash();
   return status == FLASH_OK;
@@ -217,9 +217,9 @@ uint8_t SPIFlash::enable_quad_spi() {
  */
 uint8_t SPIFlash::disable_quad_spi() {
   uint8_t status = FLASH_OK;
-  uint8_t reg2 = 0;
-  read_register(Read_Status_Register2_cmd, reg2, 1);
-  BIT_CLEAR(reg2, QUAD_ENABLE_bit);
+  uint8_t reg2[1] = {0};
+  read_register(Read_Status_Reg2_cmd, reg2, 1);
+  BIT_CLEAR(reg2[0], SR2_QUAD_ENABLE_bit);
   status = write_register(Write_Status_Reg2_cmd, reg2, 1);
   wait_flash();
   return status == FLASH_OK;
