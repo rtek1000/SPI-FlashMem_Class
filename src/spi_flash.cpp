@@ -6,11 +6,21 @@ void SPIFlash::flash_set_cs(uint8_t CS_pin) {
   _FLASH_CS = CS_pin;
 }
 
-uint8_t SPIFlash::begin(uint32_t IcModelSize_Mbit, uint8_t CS_pin, uint32_t speedMaximum) {
-  FLASH_BYTE = ((IcModelSize_Mbit / 8) * 1024 * 1024);  // BIT to BYTE: (IcModelSize_Mbit / 8)
-  PAGE_SIZE = (FLASH_BYTE / PAGE_BYTE);             // For W25Q32: ((1) * 1024) / ((1) * 256) = 4MB bytes
-  SECTOR_SIZE = (FLASH_BYTE / SECTOR_BYTE);         // For W25Q32: ((1) * 1024) / ((4) * 1024) = 256 sectors
-  BLOCK_SIZE = (FLASH_BYTE / BLOCK_BYTE);           // For W25Q32: ((1) * 1024) / ((64) * 1024) = 64 blocks
+uint8_t SPIFlash::begin(uint32_t IcModelSize_Mbit,
+                        uint32_t BlockBytes,
+                        uint16_t SectorBytes,
+                        uint16_t PageBytes,
+                        uint8_t CS_pin,
+                        uint32_t speedMaximum) {
+  if (IcModelSize_Mbit == 4) {
+    BYTE_FLASH = ((512) * 1024);  // BIT to BYTE: (IcModelSize_Mbit / 8)
+  } else {
+    BYTE_FLASH = ((IcModelSize_Mbit / 8) * 1024 * 1024);  // BIT to BYTE: (IcModelSize_Mbit / 8)
+  }
+
+  SIZE_PAGE = (BYTE_FLASH / PageBytes);      // For W25Q32: ((1) * 1024) / ((1) * 256) = 4MB bytes
+  SIZE_SECTOR = (BYTE_FLASH / SectorBytes);  // For W25Q32: ((1) * 1024) / ((4) * 1024) = 256 sectors
+  SIZE_BLOCK = (BYTE_FLASH / BLOCK_BYTE);    // For W25Q32: ((1) * 1024) / ((64) * 1024) = 64 blocks
 
   flash_set_cs(CS_pin);
 
@@ -108,7 +118,7 @@ uint8_t SPIFlash::erase_chip() {
 }
 
 uint8_t SPIFlash::erase_sector(uint16_t sector) {
-  if (sector > SECTOR_SIZE) {
+  if (sector > SIZE_SECTOR) {
     return FLASH_ERR_PARAM;
   }
   //enable
@@ -128,7 +138,7 @@ uint8_t SPIFlash::write_flash(uint32_t address, uint8_t *data, uint32_t size) {
   uint8_t status = FLASH_OK;
   int32_t page_byte = size;
 
-  if (size > (PAGE_SIZE * PAGE_BYTE)) {
+  if (size > (SIZE_PAGE * PAGE_BYTE)) {
     return FLASH_ERR_PARAM;
   }
   //write map
@@ -198,7 +208,7 @@ uint8_t SPIFlash::reset_flash() {
  */
 uint8_t SPIFlash::enable_quad_spi() {
   uint8_t status = FLASH_OK;
-  uint8_t reg2[1] = {0};
+  uint8_t reg2[1] = { 0 };
   read_register(Read_Status_Reg2_cmd, reg2, 1);
   BIT_SET(reg2[0], SR2_QUAD_ENABLE_bit);
   status = write_register(Write_Status_Reg2_cmd, reg2, 1);
@@ -217,7 +227,7 @@ uint8_t SPIFlash::enable_quad_spi() {
  */
 uint8_t SPIFlash::disable_quad_spi() {
   uint8_t status = FLASH_OK;
-  uint8_t reg2[1] = {0};
+  uint8_t reg2[1] = { 0 };
   read_register(Read_Status_Reg2_cmd, reg2, 1);
   BIT_CLEAR(reg2[0], SR2_QUAD_ENABLE_bit);
   status = write_register(Write_Status_Reg2_cmd, reg2, 1);

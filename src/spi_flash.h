@@ -4,19 +4,68 @@
 #include <Arduino.h>
 #include <SPI.h>
 
+#define W25Q40_IC 4     // 4M-BIT
+#define W25Q80_IC 8     // 8M-BIT
+#define W25Q16_IC 16    // 16M-BIT
+#define W25Q32_IC 32    // 32M-BIT
+#define W25Q64_IC 64    // 64M-BIT
+#define W25Q128_IC 128  // 128M-BIT
+#define W25Q256_IC 256  // 256M-BIT
+#define W25Q512_IC 512  // 512M-BIT
+#define W25Q01_IC 1024  // 1G-BIT (1024M-BIT) 32-BIT addr
+#define W25Q02_IC 2048  // 2G-BIT (2048M-BIT) 32-BIT addr
+
+// #define W25Qxx_switch 4 // 4M-BIT
+// #define W25Qxx_switch 8 // 8M-BIT
+// #define W25Qxx_switch 16 // 16M-BIT
+#define W25Qxx_switch 32  // 32M-BIT
+// #define W25Qxx_switch 64 // 64M-BIT
+// #define W25Qxx_switch 128 // 128M-BIT
+// #define W25Qxx_switch 256 // 256M-BIT
+// #define W25Qxx_switch 512 // 512M-BIT
+// #define W25Qxx_switch 1024 // 1G-BIT (1024M-BIT) 32-BIT addr
+// #define W25Qxx_switch 2048 // 2G-BIT (2048M-BIT) 32-BIT addr
+
+/*  For use in a global variable (array bound)
+    - FLASH_BYTE/SECTOR_BYTE/BLOCK_BYTE/PAGE_BYTE
+    - PAGE_SIZE/SECTOR_SIZE/BLOCK_BYTE
+ */
+
+/* Here need to edit manually - BEGIN, */
+/*
+    Or uncomment a line above "W25Qxx_switch"
+    - The memories W25Qxx also accept 32kB blocks see datasheet
+    - - Default: 64kB
+ */
+
+#ifdef W25Qxx_switch
+
+#if W25Qxx_switch == 4
+#define FLASH_BYTE (uint32_t)((512)) * 1024)  // 512kB (for W25Q32: "(4)")
+#else                               // #if W25Qxx_switch == 4
+#define FLASH_BYTE (uint32_t)((W25Qxx_switch / 8)) * 1024 * 1024)  //4MB (for W25Q32: "(4)")
+#endif                                                   // #if W25Qxx_switch == 4
+
+#else                                   // #ifdef W25Qxx_switch
+#define FLASH_BYTE (uint32_t)((4) * 1024 * 1024)  //4MB (for W25Q32: "(4)")
+#endif                                  // #ifdef W25Qxx_switch
+
+#define BLOCK_BYTE (uint32_t)((64) * 1024)  //64kb (The memories W25Qxx also accept 32kB blocks see datasheet)
+// #define BLOCK_BYTE (uint32_t)((32) * 1024)  //64kb (The memories W25Qxx also accept 32kB blocks see datasheet)
+#define SECTOR_BYTE (uint16_t)((4) * 1024)  //4kb
+#define PAGE_BYTE (uint16_t)((1) * 256)     //256byte
+/* Here need to edit manually - END */
+
+#define PAGE_SIZE (FLASH_BYTE / PAGE_BYTE)  // for W25Q32: ((1) * 1024) //1024*256 = 4MB
+#define SECTOR_SIZE (FLASH_BYTE / SECTOR_BYTE)
+#define BLOCK_SIZE (FLASH_BYTE / BLOCK_BYTE)
+
+#define FLASH_OK 0
+#define FLASH_ERR 1
+#define FLASH_ERR_PARAM 2
+
 #define BIT_SET(a, b) ((a) |= (1ULL << (b)))
 #define BIT_CLEAR(a, b) ((a) &= ~(1ULL << (b)))
-
-#define W25Q40_IC 4// 4M-BIT
-#define W25Q80_IC 8// 8M-BIT
-#define W25Q16_IC 16// 16M-BIT
-#define W25Q32_IC 32// 32M-BIT
-#define W25Q64_IC 64// 64M-BIT
-#define W25Q128_IC 128// 128M-BIT
-#define W25Q256_IC 256// 256M-BIT
-#define W25Q512_IC 512// 512M-BIT
-#define W25Q01_IC 1024// 1G-BIT (1024M-BIT) 32-BIT addr
-#define W25Q02_IC 2048// 2G-BIT (2048M-BIT) 32-BIT addr
 
 // (Volatile/Non-Volatile Writable)
 #define SR1_WRITE_IN_PROGRESS_bit 0
@@ -116,15 +165,17 @@
       (date code 1124 and beyond) support the SFDP feature as specified in the applicable datasheet.
  */
 
-#define FLASH_OK 0
-#define FLASH_ERR 1
-#define FLASH_ERR_PARAM 2
-
 class SPIFlash {
 public:
   SPIFlash();
 
-  uint8_t begin(uint32_t IcModelSize_Mbit = W25Q32_IC, uint8_t CS_pin = 5, uint32_t speedMaximum = 4000000);
+  uint8_t begin(uint32_t IcModelSize_Mbit = W25Q32_IC, // Default: 32Mbits
+                uint32_t BlockBytes = BLOCK_BYTE, // Default: 64kB
+                uint16_t SectorBytes = SECTOR_BYTE, // Default: 4kB
+                uint16_t PageBytes = PAGE_BYTE, // Default: 256B
+                uint8_t CS_pin = 5,
+                uint32_t speedMaximum = 4000000);
+
   uint8_t init_flash(void);
 
   /*
@@ -165,18 +216,16 @@ public:
   uint8_t enable_quad_spi();
   uint8_t disable_quad_spi();
 
-  uint32_t FLASH_BYTE = (uint32_t)((4) * 1024 * 1024);  //4MB (for W25Q32: "(4)")
-  uint16_t SECTOR_BYTE = (uint16_t)((4) * 1024);        //4kb
-  uint16_t BLOCK_BYTE = (uint16_t)((64) * 1024);        //64kb (The memories W25Qxx also accept 32kB blocks see datasheet)
-  uint16_t PAGE_BYTE = (uint16_t)((1) * 256);           //256byte
+  uint32_t BYTE_FLASH;  // Value calculated automatically when executing Flash1.begin(W25Qxx_IC)
 
-  uint16_t PAGE_SIZE = (uint16_t)(FLASH_BYTE / PAGE_BYTE);  // for W25Q32: ((1) * 1024) //1024*256 = 4MB
-  uint16_t SECTOR_SIZE = (uint16_t)(FLASH_BYTE / SECTOR_BYTE);
-  uint16_t BLOCK_SIZE = (uint16_t)(FLASH_BYTE / BLOCK_BYTE);
+  uint16_t SIZE_PAGE;    // Value calculated automatically when executing Flash1.begin(W25Q32_IC)
+  uint16_t SIZE_SECTOR;  // Value calculated automatically when executing Flash1.begin(W25Q32_IC)
+  uint16_t SIZE_BLOCK;   // Value calculated automatically when executing Flash1.begin(W25Q32_IC)
 
 private:
   uint8_t _FLASH_CS;
   uint32_t _speedMaximum;
+  bool manually_setup = true;
 
   void flash_set_cs(uint8_t CS_pin);
   void write_enable(void);
